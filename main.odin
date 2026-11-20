@@ -1,6 +1,8 @@
 package main
 
 import "core:fmt"
+import "core:os"
+import "core:strconv"
 import "core:strings"
 
 Push :: struct {
@@ -64,7 +66,7 @@ C_FOOTER :: """
 """
 
 
-gen_code :: proc(program: []Instruction) -> string {
+generate_code :: proc(program: []Instruction) -> string {
 	sb := strings.builder_make()
 	defer strings.builder_destroy(&sb)
 
@@ -86,7 +88,50 @@ gen_code :: proc(program: []Instruction) -> string {
 	return strings.to_string(sb)
 }
 
+compile :: proc(tokens: [dynamic]Token) -> (program: [dynamic]Instruction, ok: bool) {
+	program = make([dynamic]Instruction)
+	for token in tokens {
+		instr: Instruction
+		switch token.text {
+		case "dump":
+			instr = Dump{}
+
+		case "+":
+			instr = Add{}
+
+		case:
+			num, ok := strconv.parse_i64(token.text)
+			if !ok {
+				fmt.eprintfln("Expected an int, got '%s'", token.text)
+				return
+			}
+			instr = Push{num}
+		}
+
+		append(&program, instr)
+	}
+
+	ok = true
+	return
+}
+
 main :: proc() {
-	program := [?]Instruction{Push{10}, Push{20}, Add{}, Dump{}}
-	fmt.println(gen_code(program[:]))
+	filepath :: "./examples/compile_me.stack"
+	data, ok := os.read_entire_file(filepath, context.allocator)
+	if ok != nil {
+		fmt.eprintln("Failed to read file:", filepath)
+		return
+	}
+	defer delete(data)
+
+	source := string(data)
+	tokens := lex(source)
+	defer delete(tokens)
+
+	program, success := compile(tokens)
+	if !success do return
+
+	code := generate_code(program[:])
+	fmt.println(code)
+
 }
